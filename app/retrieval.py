@@ -51,12 +51,12 @@ def lookup_refs(conn, refs: list[Ref]) -> list[dict]:
             cur = conn.execute(
                 "SELECT * FROM texts WHERE ref LIKE ? ORDER BY ref", (pat,)
             )
-        else:  # mishnah — matches Mishnah/Bartenura/Tosfos Yom Tov on that mishnah
+        else:  # mishnah — matches the mishnah + everything printed on it
             pat = f"%Mikvaos {ref.chapter}:{ref.mishnah}"
             cur = conn.execute(
                 "SELECT * FROM texts WHERE category IN ('mishna','rishon','acharon') "
-                "AND (ref LIKE ? OR ref LIKE ?) ORDER BY ref",
-                (pat, pat + ":%"),
+                "AND (ref LIKE ? OR ref LIKE ? OR ref LIKE ?) ORDER BY ref",
+                (pat, pat + ":%", pat + " %"),
             )
         rows.extend(dict(r) for r in cur.fetchall())
     # dedupe preserving order, cap

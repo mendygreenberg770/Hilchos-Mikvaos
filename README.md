@@ -34,6 +34,36 @@ failed; fix it in `ingest/works.py` and re-run just that work.
 > **Note for Claude Code on the web:** the ingestion script needs network
 > access to `www.sefaria.org` — add it to the environment's network allowlist.
 
+## 1b. Vilna Mishnayos extraction (mishna + on-daf meforshim)
+
+```bash
+python scripts/ingest_vilna.py
+```
+
+Ingests `sources/mishnayos_vilna_taharos/records.jsonl` — a letter-faithful
+extraction from the digital-Vilna Mishnayos Seder Taharos PDF (see
+`sources/mishnayos_vilna_taharos/EXTRACTION_README.md`, produced with
+`tools/seforim_extract.py`). It:
+
+- **replaces the Hebrew text of exactly the mishnayos it contains** (all 71
+  mishnayos of Mikvaos, reconstructed and validated against the printed
+  numerals — 8,10,4,5,6,11,7,5,7,8 per perek), keeping any English
+  translation from Sefaria;
+- **adds the on-daf meforshim**: ר"ש משאנץ, פירוש המשניות לרמב"ם, and
+  פירוש הרא"ש as per-dibur-hamatchil chunks tagged by perek:mishnah
+  (e.g. `Rash Mikvaos 2:3 ד"ה ספק מים שאובין`), plus עין משפט and the
+  marginal הגהות וילקוטים per page.
+
+Run it **after** `ingest_sefaria.py` (the Sefaria mishnah work would
+overwrite these texts — if you re-run Sefaria later, just re-run this).
+Re-runs are idempotent: mishnayos upsert by ref, meforshim are reloaded
+per sefer.
+
+To extract other born-digital Vilna-layout seforim, use
+`tools/seforim_extract.py --profile` on the new PDF (see the extraction
+README for the config workflow) and feed the resulting `records.jsonl`
+through a similar ingester.
+
 ## 2. Verify retrieval (do this before trusting any answers)
 
 ```bash
@@ -99,8 +129,10 @@ present machlokes as machlokes, never invent a mekor, research — not psak).
 
 ```
 app/        config, db schema, ref parsing, retrieval, answer + tagging calls, FastAPI routes
-ingest/     Sefaria works config + ingestion library
-scripts/    ingest_sefaria.py, embed_texts.py, test_retrieval.py (retrieval harness)
+ingest/     Sefaria works config + ingestion library; Vilna mishnayos ingester
+sources/    committed text sources (Vilna mishnayos extraction records.jsonl)
+tools/      seforim_extract.py — Vilna-layout PDF text extractor (for new seforim)
+scripts/    ingest_sefaria.py, ingest_vilna.py, embed_texts.py, test_retrieval.py
 static/     single-page RTL UI
 tests/      offline unit tests (stdlib unittest)
 data/       SQLite database (gitignored) — back this up; it IS the system
@@ -113,5 +145,7 @@ data/       SQLite database (gitignored) — back this up; it IS the system
 - [x] 3. Answer endpoint with citation-enforcing prompt
 - [x] 4. Minimal chat UI (RTL from day one)
 - [x] 5. Auto-tagging + question log + browse UI + export
-- [ ] 6. PDF/OCR ingestion for non-Sefaria seforim (acharonim, contemporary)
+- [~] 6. PDF ingestion for non-Sefaria seforim — done for born-digital
+       Vilna-layout PDFs (`tools/seforim_extract.py` + `ingest/vilna.py`,
+       used for Mishnayos Mikvaos with ר"ש/פיה"מ/רא"ש); OCR for scans still open
 - [ ] 7. Deploy for phone access (VPS/Fly.io behind a password)
