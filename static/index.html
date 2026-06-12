@@ -152,9 +152,12 @@ const esc = (s) => (s ?? "").toString().replace(/[&<>"]/g,
 async function api(path, opts) {
   const r = await fetch(path, opts);
   if (!r.ok) {
-    let msg = r.statusText;
-    try { msg = (await r.json()).detail || msg; } catch {}
-    throw new Error(msg);
+    let msg = "";
+    try {
+      const body = await r.text();
+      try { msg = JSON.parse(body).detail || ""; } catch { msg = body.slice(0, 120); }
+    } catch {}
+    throw new Error(`HTTP ${r.status}${msg ? " — " + msg : ""}`);
   }
   return r.json();
 }

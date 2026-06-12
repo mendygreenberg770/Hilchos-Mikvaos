@@ -9,7 +9,8 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               PlainTextResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -46,6 +47,14 @@ async def _lifespan(app):
 
 
 app = FastAPI(title="Hilchos Mikvaos Research", lifespan=_lifespan)
+
+
+@app.exception_handler(Exception)
+async def _unhandled_error(request, exc):
+    # Personal tool: surface the real reason so failures are debuggable
+    # from the UI (instead of an opaque "Internal Server Error").
+    return JSONResponse(status_code=500,
+                        content={"detail": f"{type(exc).__name__}: {exc}"})
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
