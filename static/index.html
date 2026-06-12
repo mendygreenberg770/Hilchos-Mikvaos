@@ -1,0 +1,306 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>הלכות מקוואות — מערכת מחקר</title>
+<style>
+  :root {
+    --bg: #f7f5f0; --card: #ffffff; --ink: #1f2430; --muted: #6b7080;
+    --accent: #1d5c8c; --accent-soft: #e8f0f7; --border: #ddd8cc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: 'Segoe UI', 'Arial Hebrew', 'Noto Sans Hebrew', sans-serif;
+    font-size: 17px; line-height: 1.7;
+  }
+  header {
+    background: var(--accent); color: #fff; padding: .7rem 1rem;
+    display: flex; align-items: baseline; gap: 1.2rem; flex-wrap: wrap;
+  }
+  header h1 { font-size: 1.15rem; margin: 0; font-weight: 600; }
+  nav { display: flex; gap: .3rem; }
+  nav button {
+    background: transparent; color: #cfe2f0; border: none; font: inherit;
+    padding: .25rem .8rem; border-radius: 6px; cursor: pointer;
+  }
+  nav button.active { background: #ffffff22; color: #fff; font-weight: 600; }
+  main { max-width: 56rem; margin: 1rem auto 4rem; padding: 0 1rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem;
+  }
+  textarea, input[type=text], select {
+    width: 100%; font: inherit; padding: .6rem .8rem; border: 1px solid var(--border);
+    border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  textarea { min-height: 5.5rem; resize: vertical; }
+  .row { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; margin-top: .6rem; }
+  button.primary {
+    background: var(--accent); color: #fff; border: none; font: inherit;
+    padding: .55rem 1.6rem; border-radius: 8px; cursor: pointer; font-weight: 600;
+  }
+  button.primary:disabled { opacity: .5; cursor: wait; }
+  label.toggle { display: flex; gap: .35rem; align-items: center; color: var(--muted); font-size: .9rem; }
+  .answer { white-space: pre-wrap; }
+  .he-text { font-family: 'Frank Ruhl Libre', 'Times New Roman', serif; font-size: 1.12rem; }
+  .meta { color: var(--muted); font-size: .82rem; }
+  .tag {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: .05rem .7rem; font-size: .8rem; margin-inline-end: .3rem;
+    cursor: pointer;
+  }
+  .ref-chip {
+    display: inline-block; background: #f0ede4; border-radius: 6px;
+    padding: .05rem .5rem; font-size: .8rem; margin: .15rem .15rem 0 0;
+  }
+  details.sources summary { cursor: pointer; color: var(--accent); font-size: .9rem; }
+  .source-item { border-top: 1px dashed var(--border); padding: .6rem 0; }
+  .source-item .ref { font-weight: 600; color: var(--accent); font-size: .9rem; }
+  .qa-q { font-weight: 600; margin-bottom: .3rem; }
+  .hidden { display: none; }
+  .filters { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .filters > * { flex: 1 1 10rem; }
+  .spinner { color: var(--muted); font-size: .9rem; }
+  .error { color: #a23b3b; background: #f9ecec; border: 1px solid #e4c8c8;
+           border-radius: 8px; padding: .6rem .9rem; }
+  a { color: var(--accent); }
+  .topbar-stats { color: #cfe2f0; font-size: .8rem; margin-inline-start: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>הלכות מקוואות</h1>
+  <nav>
+    <button data-view="ask" class="active">שאלה</button>
+    <button data-view="log">יומן</button>
+    <button data-view="browse">מקורות</button>
+  </nav>
+  <span class="topbar-stats" id="stats"></span>
+</header>
+
+<main>
+  <!-- ASK -->
+  <section id="view-ask">
+    <div class="card">
+      <textarea id="question" placeholder="שאל שאלה בהלכות מקוואות… (עברית או אנגלית; אפשר לציין סימן/סעיף, דף, או משנה)"></textarea>
+      <div class="row">
+        <button class="primary" id="askBtn">שאל</button>
+        <label class="toggle"><input type="checkbox" id="strong"> סוגיא קשה (מודל חזק)</label>
+        <span class="spinner hidden" id="askSpinner">מחפש מקורות ומנסח תשובה…</span>
+      </div>
+    </div>
+    <div id="askResult"></div>
+  </section>
+
+  <!-- LOG -->
+  <section id="view-log" class="hidden">
+    <div class="card">
+      <div class="filters">
+        <input type="text" id="logSearch" placeholder="חיפוש בשאלות ותשובות…">
+        <select id="logSiman"><option value="">כל הסימנים</option></select>
+        <select id="logTopic"><option value="">כל הנושאים</option></select>
+      </div>
+      <div class="row">
+        <a id="exportHtml" href="#" target="_blank">יצוא להדפסה</a>
+        <a id="exportMd" href="#" target="_blank">יצוא Markdown</a>
+      </div>
+    </div>
+    <div id="logList"></div>
+  </section>
+
+  <!-- BROWSE -->
+  <section id="view-browse" class="hidden">
+    <div class="card">
+      <div class="filters">
+        <input type="text" id="browseSearch" placeholder="חיפוש בטקסטים (מילות מפתח)…">
+        <select id="browseSefer"><option value="">כל הספרים</option></select>
+        <input type="text" id="browseSiman" placeholder="סימן (למשל 201)">
+      </div>
+    </div>
+    <div id="browseList"></div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => (s ?? "").toString().replace(/[&<>"]/g,
+  (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { msg = (await r.json()).detail || msg; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+/* ---------- navigation ---------- */
+document.querySelectorAll("nav button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    ["ask", "log", "browse"].forEach((v) =>
+      $("#view-" + v).classList.toggle("hidden", v !== b.dataset.view));
+    if (b.dataset.view === "log") loadLog();
+    if (b.dataset.view === "browse") loadBrowse();
+  };
+});
+
+/* ---------- stats ---------- */
+api("/api/stats").then((s) => {
+  $("#stats").textContent = `${s.texts} מקורות · ${s.questions} שאלות`;
+}).catch(() => {});
+
+/* ---------- ask ---------- */
+function renderSources(sources) {
+  if (!sources?.length) return "";
+  const items = sources.map((s) => `
+    <div class="source-item">
+      <div class="ref">${esc(s.ref)}</div>
+      <div class="he-text">${esc(s.text_he)}</div>
+      ${s.text_en ? `<div class="meta" dir="ltr">${esc(s.text_en)}</div>` : ""}
+    </div>`).join("");
+  return `<details class="sources"><summary>המקורות שנשלחו (${sources.length})</summary>${items}</details>`;
+}
+
+function renderTags(rec) {
+  const refs = (rec.refs || []).map((r) =>
+    `<span class="ref-chip">סי' ${r.siman}${r.seif ? ":" + r.seif : ""}</span>`).join("");
+  const topics = (rec.topics || []).map((t) => `<span class="tag">${esc(t)}</span>`).join("");
+  return refs + " " + topics;
+}
+
+$("#askBtn").onclick = async () => {
+  const question = $("#question").value.trim();
+  if (!question) return;
+  $("#askBtn").disabled = true;
+  $("#askSpinner").classList.remove("hidden");
+  $("#askResult").innerHTML = "";
+  try {
+    const rec = await api("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, strong: $("#strong").checked }),
+    });
+    $("#askResult").innerHTML = `
+      <div class="card">
+        <div class="qa-q">${esc(rec.question)}</div>
+        <div class="answer he-text">${esc(rec.answer)}</div>
+        <div class="row">${renderTags(rec)}</div>
+        ${renderSources(rec.sources)}
+        <div class="meta">מודל: ${esc(rec.model)} · נשמר ביומן (#${rec.id})</div>
+      </div>`;
+  } catch (e) {
+    $("#askResult").innerHTML = `<div class="error">שגיאה: ${esc(e.message)}</div>`;
+  } finally {
+    $("#askBtn").disabled = false;
+    $("#askSpinner").classList.add("hidden");
+  }
+};
+
+/* ---------- log ---------- */
+async function loadLogFilters() {
+  const [topics, simanim] = await Promise.all([api("/api/topics"), api("/api/simanim")]);
+  $("#logTopic").innerHTML = '<option value="">כל הנושאים</option>' +
+    topics.map((t) => `<option value="${esc(t.topic)}">${esc(t.topic)} (${t.n})</option>`).join("");
+  $("#logSiman").innerHTML = '<option value="">כל הסימנים</option>' +
+    simanim.map((s) => `<option value="${s.siman}">סימן ${s.siman} (${s.total})</option>`).join("");
+}
+
+async function loadLog() {
+  await loadLogFilters().catch(() => {});
+  const params = new URLSearchParams();
+  if ($("#logSearch").value.trim()) params.set("q", $("#logSearch").value.trim());
+  if ($("#logSiman").value) params.set("siman", $("#logSiman").value);
+  if ($("#logTopic").value) params.set("topic", $("#logTopic").value);
+  $("#exportHtml").href = "/api/export?fmt=html&" + params.toString();
+  $("#exportMd").href = "/api/export?fmt=md&" + params.toString();
+  try {
+    const items = await api("/api/questions?" + params.toString());
+    $("#logList").innerHTML = items.length
+      ? items.map((it) => `
+        <div class="card" data-id="${it.id}">
+          <div class="qa-q">${esc(it.question)}</div>
+          <div class="answer he-text">${esc(it.answer)}</div>
+          <div class="row">${renderTags(it)}
+            <button class="tag" onclick="editTags(${it.id})">ערוך תגיות</button>
+            <button class="tag" onclick="delQ(${it.id})">מחק</button>
+          </div>
+          <div class="meta">${esc(it.ts)} · ${esc(it.model || "")}</div>
+        </div>`).join("")
+      : '<div class="card meta">אין עדיין שאלות ביומן.</div>';
+  } catch (e) {
+    $("#logList").innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+["logSearch", "logSiman", "logTopic"].forEach((id) =>
+  $("#" + id).addEventListener("change", loadLog));
+$("#logSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") loadLog(); });
+
+async function editTags(id) {
+  const rec = await api("/api/questions/" + id);
+  const topics = prompt("נושאים (מופרדים בפסיק):", rec.topics.join(", "));
+  if (topics === null) return;
+  const refsStr = prompt("סימן:סעיף (מופרדים בפסיק, למשל 201:5, 198):",
+    rec.refs.map((r) => r.siman + (r.seif ? ":" + r.seif : "")).join(", "));
+  if (refsStr === null) return;
+  const refs = refsStr.split(",").map((s) => s.trim()).filter(Boolean).map((s) => {
+    const [siman, seif] = s.split(":");
+    return { siman: parseInt(siman), seif: seif ? parseInt(seif) : null };
+  }).filter((r) => !isNaN(r.siman));
+  await api(`/api/questions/${id}/tags`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topics: topics.split(",").map((t) => t.trim()).filter(Boolean), refs }),
+  });
+  loadLog();
+}
+
+async function delQ(id) {
+  if (!confirm("למחוק שאלה זו מהיומן?")) return;
+  await api("/api/questions/" + id, { method: "DELETE" });
+  loadLog();
+}
+
+/* ---------- browse ---------- */
+async function loadBrowseFilters() {
+  const sefarim = await api("/api/sefarim");
+  $("#browseSefer").innerHTML = '<option value="">כל הספרים</option>' +
+    sefarim.map((s) => `<option value="${esc(s.sefer)}">${esc(s.sefer)} (${s.n})</option>`).join("");
+}
+
+async function loadBrowse() {
+  if ($("#browseSefer").options.length <= 1) await loadBrowseFilters().catch(() => {});
+  const params = new URLSearchParams();
+  if ($("#browseSearch").value.trim()) params.set("q", $("#browseSearch").value.trim());
+  if ($("#browseSefer").value) params.set("sefer", $("#browseSefer").value);
+  if ($("#browseSiman").value.trim()) params.set("siman", $("#browseSiman").value.trim());
+  try {
+    const items = await api("/api/texts?" + params.toString());
+    $("#browseList").innerHTML = items.length
+      ? items.map((t) => `
+        <div class="card">
+          <div class="ref-chip">${esc(t.ref)}</div>
+          <div class="he-text">${esc(t.text_he)}</div>
+          ${t.text_en ? `<div class="meta" dir="ltr">${esc(t.text_en)}</div>` : ""}
+        </div>`).join("")
+      : '<div class="card meta">לא נמצאו מקורות. (האם הספרייה נטענה? scripts/ingest_sefaria.py)</div>';
+  } catch (e) {
+    $("#browseList").innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+["browseSefer"].forEach((id) => $("#" + id).addEventListener("change", loadBrowse));
+["browseSearch", "browseSiman"].forEach((id) =>
+  $("#" + id).addEventListener("keydown", (e) => { if (e.key === "Enter") loadBrowse(); }));
+
+/* Enter (Ctrl) submits the question */
+$("#question").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#askBtn").click();
+});
+</script>
+</body>
+</html>
