@@ -262,12 +262,11 @@ def list_sefarim():
 
 @app.get("/api/health")
 def health():
-    """Setup status for the UI: is a Claude API key connected, is the library loaded."""
-    import os
+    """Setup status for the UI: how Claude is connected, is the library loaded."""
+    from . import llm
     with get_conn() as conn:
         return {
-            "api_key_configured": bool(os.environ.get("ANTHROPIC_API_KEY")
-                                       or os.environ.get("ANTHROPIC_AUTH_TOKEN")),
+            "claude_mode": llm.mode(),  # "api" | "subscription" | "none"
             "embeddings_enabled": bool(config.VOYAGE_API_KEY),
             "texts": conn.execute("SELECT count(*) c FROM texts").fetchone()["c"],
             "answer_model": config.ANSWER_MODEL,

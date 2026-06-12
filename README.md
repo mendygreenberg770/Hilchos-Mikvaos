@@ -14,18 +14,34 @@ cp .env.example .env        # then paste your key in (next section)
 
 ## Connecting your Claude account
 
-The app talks to Claude through the **API** (pay-per-use, separate from a
-claude.ai subscription — personal use here costs a few dollars a month):
+Two ways — either one works (the app picks automatically; an API key wins
+if both are set up):
 
-1. Go to [platform.claude.com](https://platform.claude.com) and sign in /
-   create an account.
+**Option 1 — your claude.ai subscription (Pro/Max).** Uses your existing
+claude.ai account through Claude Code's login; questions are covered by the
+subscription, no separate API billing.
+
+1. Install Claude Code: `npm install -g @anthropic-ai/claude-code`
+2. Run `claude`, then `/login` and sign in with your claude.ai account
+   (choose the subscription option).
+3. `pip install claude-agent-sdk`
+4. Restart the app — it detects the login by itself.
+
+Note: subscription mode answers with the model families your plan provides
+("sonnet"/"opus"), and usage counts against your plan's limits.
+
+**Option 2 — API key (pay-per-use).** Standard developer-platform route;
+personal use here costs a few dollars a month.
+
+1. Sign in at [platform.claude.com](https://platform.claude.com).
 2. Add a small amount of billing credit (Settings → Billing).
 3. Create a key under **API Keys → Create Key**.
 4. Put it in the `.env` file next to the app:
    `ANTHROPIC_API_KEY=sk-ant-...`
 
 The app loads `.env` automatically on startup — no shell exports needed.
-If the key is missing, the UI shows a setup banner explaining exactly this.
+If neither is connected, the UI shows a setup banner with these steps,
+and the header shows which connection is active.
 
 ## 1. Build the library (Sefaria ingestion)
 

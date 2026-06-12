@@ -3,3 +3,6 @@ uvicorn[standard]>=0.30
 anthropic>=0.40
 httpx>=0.27
 numpy>=1.26
+# Optional — answer with a claude.ai Pro/Max subscription instead of an API key
+# (requires Claude Code login; see README "Connecting your Claude account"):
+# claude-agent-sdk

@@ -1,8 +1,6 @@
 """The answer call: retrieved sources + citation-enforcing system prompt."""
 
-import anthropic
-
-from . import config
+from . import config, llm
 
 SYSTEM_PROMPT = """\
 You are assisting with halachic research in hilchos mikvaos (the laws of mikvaos, \
@@ -35,23 +33,13 @@ def _format_sources(rows: list[dict]) -> str:
 
 
 def answer_question(question: str, rows: list[dict], model: str | None = None) -> tuple[str, str]:
-    """Returns (answer_text, model_used)."""
+    """Returns (answer_text, model_used). Works on either backend — API key
+    or claude.ai subscription (see app/llm.py)."""
     model = model or config.ANSWER_MODEL
-    client = anthropic.Anthropic()
-
     user_msg = (
         f"<sources>\n{_format_sources(rows)}\n</sources>\n\n"
         f"Question: {question}"
     )
-
-    with client.messages.stream(
-        model=model,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_msg}],
-    ) as stream:
-        msg = stream.get_final_message()
-
-    text = "".join(b.text for b in msg.content if b.type == "text")
+    text = llm.complete(system=SYSTEM_PROMPT, user=user_msg,
+                        model=model, max_tokens=8000)
     return text, model

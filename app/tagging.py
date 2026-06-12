@@ -3,9 +3,7 @@ and 1-3 topic tags from the Q&A. Best-effort — failures never block the answer
 
 import json
 
-import anthropic
-
-from . import config
+from . import config, llm
 
 TAG_SCHEMA = {
     "type": "object",
@@ -48,25 +46,43 @@ actually discussed, not passing mentions.
 </answer>"""
 
 
+def _tag_via_api(prompt: str) -> dict | None:
+    """API backend: structured output guarantees valid JSON."""
+    import anthropic
+    client = anthropic.Anthropic()
+    resp = client.messages.create(
+        model=config.TAGGING_MODEL,
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}],
+        output_config={"format": {"type": "json_schema", "schema": TAG_SCHEMA}},
+    )
+    text = next(b.text for b in resp.content if b.type == "text")
+    return json.loads(text)
+
+
+def _tag_via_subscription(prompt: str) -> dict | None:
+    """Subscription backend: ask for plain JSON and parse defensively."""
+    text = llm.complete(
+        system="Reply with a single JSON object only — no prose, no code fences.",
+        user=prompt + '\n\nReply as JSON: {"refs": [{"siman": int, "seif": int|null}], "topics": [str]}',
+        model=config.TAGGING_MODEL,
+        max_tokens=1000,
+    )
+    return llm.extract_json(text)
+
+
 def tag_question(question: str, answer: str) -> dict:
     """Returns {"refs": [{"siman": int, "seif": int|None}], "topics": [str]}."""
     try:
-        client = anthropic.Anthropic()
-        resp = client.messages.create(
-            model=config.TAGGING_MODEL,
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": TAG_PROMPT.format(question=question[:4000],
-                                             answer=answer[:8000]),
-            }],
-            output_config={"format": {"type": "json_schema", "schema": TAG_SCHEMA}},
-        )
-        text = next(b.text for b in resp.content if b.type == "text")
-        data = json.loads(text)
-        data["topics"] = [t.strip().lower() for t in data.get("topics", []) if t.strip()][:3]
+        prompt = TAG_PROMPT.format(question=question[:4000], answer=answer[:8000])
+        data = (_tag_via_api(prompt) if llm.mode() == "api"
+                else _tag_via_subscription(prompt))
+        if not isinstance(data, dict):
+            return {"refs": [], "topics": []}
+        data["topics"] = [t.strip().lower() for t in data.get("topics", []) if isinstance(t, str) and t.strip()][:3]
         data["refs"] = [r for r in data.get("refs", [])
-                        if isinstance(r.get("siman"), int) and 1 <= r["siman"] <= 403]
+                        if isinstance(r, dict) and isinstance(r.get("siman"), int)
+                        and 1 <= r["siman"] <= 403]
         return data
     except Exception:
         return {"refs": [], "topics": []}
