@@ -260,6 +260,21 @@ def list_sefarim():
             "SELECT sefer, category, count(*) AS n FROM texts GROUP BY sefer, category ORDER BY sefer")]
 
 
+@app.get("/api/health")
+def health():
+    """Setup status for the UI: is a Claude API key connected, is the library loaded."""
+    import os
+    with get_conn() as conn:
+        return {
+            "api_key_configured": bool(os.environ.get("ANTHROPIC_API_KEY")
+                                       or os.environ.get("ANTHROPIC_AUTH_TOKEN")),
+            "embeddings_enabled": bool(config.VOYAGE_API_KEY),
+            "texts": conn.execute("SELECT count(*) c FROM texts").fetchone()["c"],
+            "answer_model": config.ANSWER_MODEL,
+            "strong_model": config.STRONG_MODEL,
+        }
+
+
 @app.get("/api/stats")
 def stats():
     with get_conn() as conn:

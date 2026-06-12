@@ -2,6 +2,24 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_dotenv(path: Path):
+    """Tiny .env loader so connecting an API key is just editing one file.
+    Existing environment variables win."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip("'\"")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv(BASE_DIR / ".env")
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = Path(os.environ.get("MIKVAOS_DB", DATA_DIR / "mikvaos.db"))
 

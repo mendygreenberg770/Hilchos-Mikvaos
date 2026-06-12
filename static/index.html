@@ -65,6 +65,20 @@
   .spinner { color: var(--muted); font-size: .9rem; }
   .error { color: #a23b3b; background: #f9ecec; border: 1px solid #e4c8c8;
            border-radius: 8px; padding: .6rem .9rem; }
+  .notice { background: #fdf6e3; border: 1px solid #e8d9a8; border-radius: 10px;
+            padding: .8rem 1.1rem; margin-bottom: 1rem; font-size: .95rem; }
+  .notice code { background: #f0e9d2; padding: .1rem .4rem; border-radius: 4px;
+                 direction: ltr; display: inline-block; }
+  .lib-title { margin: 0 0 .5rem; font-size: 1rem; color: var(--accent); }
+  .lib-group { margin-bottom: .55rem; }
+  .lib-group b { color: var(--ink); font-weight: 600; }
+  .lib-sefer { display: inline-block; background: #f4f1e8; border-radius: 6px;
+               padding: .05rem .55rem; margin: .12rem .12rem 0 0; font-size: .85rem;
+               color: #444; }
+  .lib-sefer small { color: var(--muted); }
+  .chip-sample { background: var(--accent-soft); color: var(--accent); border: none;
+                 font: inherit; font-size: .82rem; border-radius: 999px;
+                 padding: .15rem .8rem; cursor: pointer; }
   a { color: var(--accent); }
   .topbar-stats { color: #cfe2f0; font-size: .8rem; margin-inline-start: auto; }
 </style>
@@ -83,6 +97,7 @@
 <main>
   <!-- ASK -->
   <section id="view-ask">
+    <div id="setupBanner"></div>
     <div class="card">
       <textarea id="question" placeholder="שאל שאלה בהלכות מקוואות… (עברית או אנגלית; אפשר לציין סימן/סעיף, דף, או משנה)"></textarea>
       <div class="row">
@@ -90,8 +105,13 @@
         <label class="toggle"><input type="checkbox" id="strong"> סוגיא קשה (מודל חזק)</label>
         <span class="spinner hidden" id="askSpinner">מחפש מקורות ומנסח תשובה…</span>
       </div>
+      <div class="row" id="sampleChips"></div>
     </div>
     <div id="askResult"></div>
+    <div class="card" id="libraryCard">
+      <h3 class="lib-title">מה יש בספרייה</h3>
+      <div id="libraryList" class="meta">טוען…</div>
+    </div>
   </section>
 
   <!-- LOG -->
@@ -154,6 +174,85 @@ document.querySelectorAll("nav button").forEach((b) => {
 api("/api/stats").then((s) => {
   $("#stats").textContent = `${s.texts} מקורות · ${s.questions} שאלות`;
 }).catch(() => {});
+
+/* ---------- setup banner + library overview ---------- */
+const SEFER_HE = {
+  "Shulchan Aruch": "שולחן ערוך יו״ד", "Shach": "ש״ך", "Taz": "ט״ז",
+  "Be'er Heitev": "באר היטב", "Pischei Teshuva": "פתחי תשובה",
+  "Mishnayos Mikvaos": "משניות מקואות", "Bartenura": "ברטנורא",
+  "Tosfos Yom Tov": "תוספות יום טוב", "Rambam Hilchos Mikvaos": "רמב״ם הל' מקואות",
+  "Gemara Niddah": "גמרא נדה", "Gemara Chagigah": "גמרא חגיגה",
+  "Rashi": "רש״י", "Tosfos": "תוספות", "Rosh Hilchos Mikvaos": "רא״ש הל' מקואות",
+  "Rash MiShantz": "ר״ש משאנץ", "Pirush HaMishnayos LehaRambam": "פיה״מ לרמב״ם",
+  "Pirush HaRosh": "פירוש הרא״ש", "Ein Mishpat": "עין משפט",
+  "Hagahos VeYalkutim": "הגהות וילקוטים",
+};
+const CATEGORY_HE = {
+  shulchan_aruch: "שולחן ערוך ונושאי כלים", mishna: "משנה", gemara: "גמרא",
+  rambam: "רמב״ם", rishon: "ראשונים", acharon: "אחרונים",
+  reference: "מראי מקומות", contemporary: "ספרי זמננו",
+};
+const CATEGORY_ORDER = ["mishna", "gemara", "rishon", "rambam",
+                        "shulchan_aruch", "acharon", "contemporary", "reference"];
+
+async function loadSetupAndLibrary() {
+  try {
+    const h = await api("/api/health");
+    const issues = [];
+    if (!h.api_key_configured) {
+      issues.push(`<b>חיבור לחשבון Claude:</b> כדי לשאול שאלות צריך מפתח API.
+        מקבלים אותו ב־<a href="https://platform.claude.com" target="_blank">platform.claude.com</a>
+        (API Keys ← Create Key), ואז שמים אותו בקובץ <code>.env</code> שליד האפליקציה:
+        <code>ANTHROPIC_API_KEY=sk-ant-...</code> — ומפעילים מחדש את השרת.`);
+    }
+    if (h.texts === 0) {
+      issues.push(`<b>הספרייה ריקה:</b> מריצים
+        <code>python scripts/ingest_sefaria.py</code> ואחר כך
+        <code>python scripts/ingest_vilna.py</code> לטעינת המקורות.`);
+    }
+    $("#setupBanner").innerHTML = issues.length
+      ? `<div class="notice">${issues.join("<br><br>")}</div>` : "";
+  } catch {}
+
+  try {
+    const sefarim = await api("/api/sefarim");
+    if (!sefarim.length) {
+      $("#libraryList").textContent = "הספרייה ריקה עדיין.";
+      return;
+    }
+    const groups = {};
+    let total = 0;
+    for (const s of sefarim) {
+      (groups[s.category] ??= []).push(s);
+      total += s.n;
+    }
+    const html = CATEGORY_ORDER.filter((c) => groups[c]).map((c) => `
+      <div class="lib-group"><b>${CATEGORY_HE[c] || esc(c)}:</b>
+        ${groups[c].map((s) =>
+          `<span class="lib-sefer">${esc(SEFER_HE[s.sefer] || s.sefer)} <small>(${s.n})</small></span>`
+        ).join(" ")}
+      </div>`).join("");
+    $("#libraryList").innerHTML = html +
+      `<div class="meta">סה״כ ${total} קטעי מקור. לעיון מלא — לשונית «מקורות».</div>`;
+  } catch (e) {
+    $("#libraryList").textContent = "לא ניתן לטעון את רשימת הספרים.";
+  }
+}
+loadSetupAndLibrary();
+
+/* ---------- sample questions ---------- */
+const SAMPLES = [
+  "מה דין חציצה ברוב שערה?",
+  "האם מים שאובין פוסלים מקוה בהמשכה?",
+  "מה כתוב בש״ך סימן רא?",
+  "מה הפשט במשנה מקואות ב:ג?",
+];
+$("#sampleChips").innerHTML =
+  '<span class="meta">דוגמאות:</span> ' +
+  SAMPLES.map((s) => `<button class="chip-sample">${esc(s)}</button>`).join(" ");
+document.querySelectorAll(".chip-sample").forEach((b) => {
+  b.onclick = () => { $("#question").value = b.textContent; $("#question").focus(); };
+});
 
 /* ---------- ask ---------- */
 function renderSources(sources) {

@@ -9,11 +9,23 @@ the actual texts (RAG) and automatically logged, tagged by siman/seif and topic.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # fill in ANTHROPIC_API_KEY (and optionally VOYAGE_API_KEY)
+cp .env.example .env        # then paste your key in (next section)
 ```
 
-Environment variables can be set in the shell or via `.env` + your own loader
-(e.g. `set -a; source .env; set +a`).
+## Connecting your Claude account
+
+The app talks to Claude through the **API** (pay-per-use, separate from a
+claude.ai subscription — personal use here costs a few dollars a month):
+
+1. Go to [platform.claude.com](https://platform.claude.com) and sign in /
+   create an account.
+2. Add a small amount of billing credit (Settings → Billing).
+3. Create a key under **API Keys → Create Key**.
+4. Put it in the `.env` file next to the app:
+   `ANTHROPIC_API_KEY=sk-ant-...`
+
+The app loads `.env` automatically on startup — no shell exports needed.
+If the key is missing, the UI shows a setup banner explaining exactly this.
 
 ## 1. Build the library (Sefaria ingestion)
 
