@@ -82,6 +82,25 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(self.client.get("/api/questions").json(), [])
 
+    def test_catalog_lists_planned_seforim_even_when_not_loaded(self):
+        r = self.client.get("/api/catalog")
+        self.assertEqual(r.status_code, 200)
+        by_sefer = {x["sefer"]: x for x in r.json()}
+        self.assertGreater(by_sefer["Shach"]["loaded"], 0)          # in fixture DB
+        self.assertIn("Rash MiShantz", by_sefer)                    # planned, not loaded
+        self.assertEqual(by_sefer["Rash MiShantz"]["loaded"], 0)
+        self.assertIn("Taz", by_sefer)
+        self.assertEqual(by_sefer["Taz"]["loaded"], 0)
+
+    def test_connect_rejects_malformed_key(self):
+        r = self.client.post("/api/connect", json={"api_key": "not-a-key"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_ingest_status_idle(self):
+        r = self.client.get("/api/ingest/status")
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["running"])
+
     def test_browse(self):
         r = self.client.get("/api/texts?siman=198")
         self.assertEqual(len(r.json()), 1)

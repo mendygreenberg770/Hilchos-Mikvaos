@@ -2,7 +2,9 @@
 
 import html
 import json
+import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -258,6 +260,127 @@ def list_sefarim():
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT sefer, category, count(*) AS n FROM texts GROUP BY sefer, category ORDER BY sefer")]
+
+
+# --------------------------------------------------------------------------
+# Account connection + one-click library loading
+# --------------------------------------------------------------------------
+
+class ConnectRequest(BaseModel):
+    api_key: str
+
+
+def _save_env_var(key: str, value: str):
+    env_path = config.BASE_DIR / ".env"
+    lines = env_path.read_text().splitlines() if env_path.exists() else []
+    lines = [l for l in lines if not l.strip().startswith(f"{key}=")]
+    lines.append(f"{key}={value}")
+    env_path.write_text("\n".join(lines) + "\n")
+
+
+@app.post("/api/connect")
+def connect_account(req: ConnectRequest):
+    """Paste-an-API-key connection from the UI: validate, persist to .env,
+    activate immediately (no restart)."""
+    key = req.api_key.strip()
+    if not key.startswith("sk-ant-"):
+        raise HTTPException(400, "זה לא נראה כמו מפתח API של Anthropic (אמור להתחיל ב-sk-ant-)")
+    import anthropic
+    try:
+        anthropic.Anthropic(api_key=key).models.list()
+    except anthropic.AuthenticationError:
+        raise HTTPException(400, "המפתח לא התקבל — ודא שהועתק במלואו ושהוא פעיל")
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"לא ניתן לאמת את המפתח מול השרת: {e.message}")
+    _save_env_var("ANTHROPIC_API_KEY", key)
+    os.environ["ANTHROPIC_API_KEY"] = key
+    return health()
+
+
+_ingest_state = {"running": False, "done": False, "error": None, "log": []}
+
+
+def _run_ingestion():
+    st = _ingest_state
+    try:
+        from ingest.sefaria import ingest_work
+        from ingest.vilna import ingest_vilna
+        from ingest.works import WORKS
+
+        conn = db.connect()
+        for work in WORKS:
+            st["log"].append(f"טוען {work['sefer']} מספריא…")
+            try:
+                stored, errors = ingest_work(conn, work, verbose=False)
+                mark = "✓" if not errors else "⚠"
+                line = f"{mark} {work['sefer']}: {stored} קטעים"
+                if errors:
+                    line += f" ({len(errors)} שגיאות — ראה לוג שרת)"
+                    for e in errors:
+                        print(f"ingest error: {e}")
+                st["log"][-1] = line
+            except Exception as e:
+                st["log"][-1] = f"✗ {work['sefer']}: {e}"
+        conn.close()
+
+        # Vilna extraction last, so its mishna text wins over Sefaria's
+        records = config.BASE_DIR / "sources" / "mishnayos_vilna_taharos" / "records.jsonl"
+        if records.exists():
+            st["log"].append("טוען משניות (וילנא) + ר\"ש, פיה\"מ, רא\"ש, הגהות…")
+            ingest_vilna(records, verbose=False)
+            st["log"][-1] = "✓ משניות דפוס וילנא + מפרשים שעל הדף"
+        st["log"].append("הטעינה הסתיימה.")
+    except Exception as e:
+        st["error"] = str(e)
+    finally:
+        st["running"] = False
+        st["done"] = True
+
+
+@app.post("/api/ingest")
+def start_ingest():
+    if _ingest_state["running"]:
+        raise HTTPException(409, "טעינה כבר רצה")
+    _ingest_state.update(running=True, done=False, error=None, log=[])
+    threading.Thread(target=_run_ingestion, daemon=True).start()
+    return {"started": True}
+
+
+@app.get("/api/ingest/status")
+def ingest_status():
+    return _ingest_state
+
+
+@app.get("/api/catalog")
+def catalog():
+    """Every sefer the system is built to hold — loaded or not — with counts.
+    Lets the UI show the full seforim list even before ingestion."""
+    from ingest.vilna import COMMENTARIES, MARGINALIA
+    from ingest.works import WORKS
+
+    planned: list[tuple[str, str]] = []
+    seen = set()
+    for w in WORKS:
+        if w["sefer"] not in seen:
+            seen.add(w["sefer"])
+            planned.append((w["sefer"], w["category"]))
+    for meta in list(COMMENTARIES.values()) + list(MARGINALIA.values()):
+        if meta["sefer"] not in seen:
+            seen.add(meta["sefer"])
+            planned.append((meta["sefer"], meta["category"]))
+
+    with get_conn() as conn:
+        counts = {r["sefer"]: r["n"] for r in conn.execute(
+            "SELECT sefer, count(*) n FROM texts GROUP BY sefer")}
+    out = [{"sefer": s, "category": c, "loaded": counts.pop(s, 0)}
+           for s, c in planned]
+    # anything in the DB that isn't in the configured catalog (custom additions)
+    for sefer, n in counts.items():
+        with get_conn() as conn:
+            cat = conn.execute("SELECT category FROM texts WHERE sefer=? LIMIT 1",
+                               (sefer,)).fetchone()["category"]
+        out.append({"sefer": sefer, "category": cat, "loaded": n})
+    return out
 
 
 @app.get("/api/health")

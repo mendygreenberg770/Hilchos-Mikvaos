@@ -76,6 +76,7 @@
                padding: .05rem .55rem; margin: .12rem .12rem 0 0; font-size: .85rem;
                color: #444; }
   .lib-sefer small { color: var(--muted); }
+  .lib-sefer.not-loaded { opacity: .5; border: 1px dashed var(--border); background: transparent; }
   .chip-sample { background: var(--accent-soft); color: var(--accent); border: none;
                  font: inherit; font-size: .82rem; border-radius: 999px;
                  padding: .15rem .8rem; cursor: pointer; }
@@ -195,58 +196,113 @@ const CATEGORY_HE = {
 const CATEGORY_ORDER = ["mishna", "gemara", "rishon", "rambam",
                         "shulchan_aruch", "acharon", "contemporary", "reference"];
 
-async function loadSetupAndLibrary() {
+async function loadSetup() {
   try {
     const h = await api("/api/health");
-    const issues = [];
     if (h.claude_mode === "none") {
-      issues.push(`<b>חיבור לחשבון Claude</b> — שתי דרכים, מספיקה אחת:<br>
-        ① <b>מנוי claude.ai (Pro/Max):</b> מתקינים את Claude Code, מתחברים עם
-        החשבון (<code>claude</code> ← <code>/login</code>), ואז
-        <code>pip install claude-agent-sdk</code> ומפעילים מחדש — האפליקציה
-        תזהה את החיבור לבד.<br>
-        ② <b>מפתח API:</b> ב־<a href="https://platform.claude.com" target="_blank">platform.claude.com</a>
-        (API Keys ← Create Key), שמים בקובץ <code>.env</code>:
-        <code>ANTHROPIC_API_KEY=sk-ant-...</code> ומפעילים מחדש.`);
-    }
-    if (h.texts === 0) {
-      issues.push(`<b>הספרייה ריקה:</b> מריצים
-        <code>python scripts/ingest_sefaria.py</code> ואחר כך
-        <code>python scripts/ingest_vilna.py</code> לטעינת המקורות.`);
-    }
-    $("#setupBanner").innerHTML = issues.length
-      ? `<div class="notice">${issues.join("<br><br>")}</div>` : "";
-    if (h.claude_mode !== "none") {
+      $("#setupBanner").innerHTML = `<div class="notice">
+        <b>חיבור לחשבון Claude</b> — הדבק מפתח API וזהו (נשמר אצלך, בלי הפעלה מחדש):
+        <div class="row">
+          <input type="text" id="apiKeyInput" dir="ltr" placeholder="sk-ant-..." style="flex:1">
+          <button class="primary" id="connectBtn">חבר</button>
+          <span class="spinner hidden" id="connectSpinner">בודק את המפתח…</span>
+        </div>
+        <div class="meta" id="connectError"></div>
+        <details><summary class="meta">מאיפה מביאים מפתח? / חיבור עם מנוי claude.ai במקום</summary>
+          <div style="margin-top:.4rem">
+            <b>מפתח API:</b> נרשמים ב־<a href="https://platform.claude.com" target="_blank">platform.claude.com</a>,
+            מוסיפים קצת קרדיט (Settings ← Billing), ויוצרים מפתח ב־API Keys ← Create Key.
+            שימוש אישי עולה דולרים בודדים לחודש.<br><br>
+            <b>מנוי claude.ai (Pro/Max):</b> במחשב שמריץ את האפליקציה —
+            מתקינים Claude Code, מתחברים (<code>claude</code> ← <code>/login</code>),
+            מריצים <code>pip install claude-agent-sdk</code>, ומפעילים מחדש.
+            האפליקציה תזהה את החיבור לבד.
+          </div>
+        </details>
+      </div>`;
+      $("#connectBtn").onclick = async () => {
+        const key = $("#apiKeyInput").value.trim();
+        if (!key) return;
+        $("#connectBtn").disabled = true;
+        $("#connectSpinner").classList.remove("hidden");
+        $("#connectError").textContent = "";
+        try {
+          await api("/api/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api_key: key }),
+          });
+          loadSetup();
+        } catch (e) {
+          $("#connectError").textContent = e.message;
+          $("#connectBtn").disabled = false;
+        } finally {
+          $("#connectSpinner").classList.add("hidden");
+        }
+      };
+    } else {
+      $("#setupBanner").innerHTML = "";
       const label = h.claude_mode === "subscription" ? "מנוי claude.ai" : "מפתח API";
-      $("#stats").textContent += ` · מחובר (${label})`;
+      if (!$("#stats").textContent.includes("מחובר"))
+        $("#stats").textContent += ` · מחובר (${label})`;
     }
   } catch {}
+}
+loadSetup();
 
+/* ---------- library catalog (always shows the full seforim list) ---------- */
+async function loadLibrary() {
   try {
-    const sefarim = await api("/api/sefarim");
-    if (!sefarim.length) {
-      $("#libraryList").textContent = "הספרייה ריקה עדיין.";
-      return;
-    }
+    const items = await api("/api/catalog");
     const groups = {};
-    let total = 0;
-    for (const s of sefarim) {
+    let total = 0, missing = 0;
+    for (const s of items) {
       (groups[s.category] ??= []).push(s);
-      total += s.n;
+      total += s.loaded;
+      if (!s.loaded) missing++;
     }
     const html = CATEGORY_ORDER.filter((c) => groups[c]).map((c) => `
       <div class="lib-group"><b>${CATEGORY_HE[c] || esc(c)}:</b>
-        ${groups[c].map((s) =>
-          `<span class="lib-sefer">${esc(SEFER_HE[s.sefer] || s.sefer)} <small>(${s.n})</small></span>`
+        ${groups[c].map((s) => s.loaded
+          ? `<span class="lib-sefer">${esc(SEFER_HE[s.sefer] || s.sefer)} <small>(${s.loaded})</small></span>`
+          : `<span class="lib-sefer not-loaded">${esc(SEFER_HE[s.sefer] || s.sefer)} <small>טרם נטען</small></span>`
         ).join(" ")}
       </div>`).join("");
-    $("#libraryList").innerHTML = html +
-      `<div class="meta">סה״כ ${total} קטעי מקור. לעיון מלא — לשונית «מקורות».</div>`;
+    let footer = `<div class="meta">סה״כ ${total} קטעי מקור נטענו. לעיון מלא — לשונית «מקורות».</div>`;
+    if (missing) {
+      footer += `<div class="row">
+        <button class="primary" id="ingestBtn">טען את הספרייה (${missing} ספרים חסרים)</button>
+        <span class="meta">מושך טקסטים מספריא — לוקח כמה דקות</span>
+      </div><div class="meta" id="ingestLog" style="white-space:pre-line"></div>`;
+    }
+    $("#libraryList").innerHTML = html + footer;
+    if (missing) $("#ingestBtn").onclick = runIngest;
   } catch (e) {
     $("#libraryList").textContent = "לא ניתן לטעון את רשימת הספרים.";
   }
 }
-loadSetupAndLibrary();
+
+async function runIngest() {
+  $("#ingestBtn").disabled = true;
+  try { await api("/api/ingest", { method: "POST" }); }
+  catch (e) { $("#ingestLog").textContent = e.message; return; }
+  const poll = setInterval(async () => {
+    try {
+      const st = await api("/api/ingest/status");
+      $("#ingestLog").textContent = st.log.slice(-6).join("\n") +
+        (st.error ? "\nשגיאה: " + st.error : "");
+      if (st.done) {
+        clearInterval(poll);
+        loadLibrary();
+        api("/api/stats").then((s) => {
+          $("#stats").textContent = `${s.texts} מקורות · ${s.questions} שאלות`;
+          loadSetup();
+        });
+      }
+    } catch { clearInterval(poll); }
+  }, 2000);
+}
+loadLibrary();
 
 /* ---------- sample questions ---------- */
 const SAMPLES = [
