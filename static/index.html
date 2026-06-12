@@ -203,23 +203,26 @@ async function loadSetup() {
   try {
     const h = await api("/api/health");
     if (h.claude_mode === "none") {
-      $("#setupBanner").innerHTML = `<div class="notice">
-        <b>חיבור לחשבון Claude</b> — הדבק מפתח API וזהו (נשמר אצלך, בלי הפעלה מחדש):
+      $("#setupBanner").innerHTML = `<div class="notice" dir="ltr" style="text-align:left">
+        <b>Connect your Claude account</b> — paste an API key and you're done
+        (saved for you, no restart needed):
         <div class="row">
           <input type="text" id="apiKeyInput" dir="ltr" placeholder="sk-ant-..." style="flex:1">
-          <button class="primary" id="connectBtn">חבר</button>
-          <span class="spinner hidden" id="connectSpinner">בודק את המפתח…</span>
+          <button class="primary" id="connectBtn">Connect</button>
+          <span class="spinner hidden" id="connectSpinner">Checking the key…</span>
         </div>
         <div class="meta" id="connectError"></div>
-        <details><summary class="meta">מאיפה מביאים מפתח? / חיבור עם מנוי claude.ai במקום</summary>
+        <details><summary class="meta">Where do I get a key? / Use a claude.ai subscription instead</summary>
           <div style="margin-top:.4rem">
-            <b>מפתח API:</b> נרשמים ב־<a href="https://platform.claude.com" target="_blank">platform.claude.com</a>,
-            מוסיפים קצת קרדיט (Settings ← Billing), ויוצרים מפתח ב־API Keys ← Create Key.
-            שימוש אישי עולה דולרים בודדים לחודש.<br><br>
-            <b>מנוי claude.ai (Pro/Max):</b> במחשב שמריץ את האפליקציה —
-            מתקינים Claude Code, מתחברים (<code>claude</code> ← <code>/login</code>),
-            מריצים <code>pip install claude-agent-sdk</code>, ומפעילים מחדש.
-            האפליקציה תזהה את החיבור לבד.
+            <b>API key:</b> sign in at
+            <a href="https://platform.claude.com" target="_blank">platform.claude.com</a>,
+            add a little billing credit (Settings &rarr; Billing), then create a key
+            under API Keys &rarr; Create Key. Personal use costs a few dollars a month.<br><br>
+            <b>claude.ai subscription (Pro/Max):</b> on the computer running the app —
+            install Claude Code, log in with your claude.ai account
+            (<code>claude</code> &rarr; <code>/login</code>), run
+            <code>pip install claude-agent-sdk</code>, and restart.
+            The app detects the login by itself.
           </div>
         </details>
       </div>`;
@@ -237,10 +240,11 @@ async function loadSetup() {
           });
           loadSetup();
           if (res.persisted === false) {
-            $("#setupBanner").innerHTML = `<div class="notice">המפתח התקבל ופעיל כעת,
-              אבל באירוח הזה אי אפשר לשמור אותו לקובץ. כדי שיישאר לתמיד: בלוח של
-              Vercel — Settings ← Environment Variables — הוסף
-              <code>ANTHROPIC_API_KEY</code> עם המפתח, ועשה Redeploy.</div>`;
+            $("#setupBanner").innerHTML = `<div class="notice" dir="ltr" style="text-align:left">
+              Your key was accepted and is active right now, but this hosting can't
+              save it to a file. To make it permanent: in the Vercel dashboard go to
+              Settings &rarr; Environment Variables, add <code>ANTHROPIC_API_KEY</code>
+              with your key, and hit Redeploy.</div>`;
           }
         } catch (e) {
           $("#connectError").textContent = e.message;

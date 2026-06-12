@@ -321,14 +321,16 @@ def connect_account(req: ConnectRequest):
     activate immediately (no restart)."""
     key = req.api_key.strip()
     if not key.startswith("sk-ant-"):
-        raise HTTPException(400, "זה לא נראה כמו מפתח API של Anthropic (אמור להתחיל ב-sk-ant-)")
+        raise HTTPException(400, "That doesn't look like an Anthropic API key "
+                                 "(it should start with sk-ant-)")
     import anthropic
     try:
         anthropic.Anthropic(api_key=key).models.list()
     except anthropic.AuthenticationError:
-        raise HTTPException(400, "המפתח לא התקבל — ודא שהועתק במלואו ושהוא פעיל")
+        raise HTTPException(400, "The key was rejected — make sure it was copied "
+                                 "in full and is still active")
     except anthropic.APIError as e:
-        raise HTTPException(502, f"לא ניתן לאמת את המפתח מול השרת: {e.message}")
+        raise HTTPException(502, f"Couldn't verify the key with the server: {e.message}")
     os.environ["ANTHROPIC_API_KEY"] = key
     persisted = True
     try:
