@@ -258,7 +258,10 @@ async function loadSetup() {
         אבל יומן השאלות וספרים שנטענו מספריא אינם נשמרים לאורך זמן.
         לשימוש קבוע עדיף אירוח עם דיסק (Railway / Fly.io) — ראה README.</div>`;
     }
-  } catch {}
+  } catch (e) {
+    $("#setupBanner").innerHTML =
+      `<div class="error">שגיאה בבדיקת מצב השרת (/api/health): ${esc(e.message)}</div>`;
+  }
 }
 loadSetup();
 
@@ -290,7 +293,7 @@ async function loadLibrary() {
     $("#libraryList").innerHTML = html + footer;
     if (missing) $("#ingestBtn").onclick = runIngest;
   } catch (e) {
-    $("#libraryList").textContent = "לא ניתן לטעון את רשימת הספרים.";
+    $("#libraryList").textContent = `לא ניתן לטעון את רשימת הספרים (${e.message}).`;
   }
 }
 
