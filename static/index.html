@@ -227,12 +227,18 @@ async function loadSetup() {
         $("#connectSpinner").classList.remove("hidden");
         $("#connectError").textContent = "";
         try {
-          await api("/api/connect", {
+          const res = await api("/api/connect", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ api_key: key }),
           });
           loadSetup();
+          if (res.persisted === false) {
+            $("#setupBanner").innerHTML = `<div class="notice">המפתח התקבל ופעיל כעת,
+              אבל באירוח הזה אי אפשר לשמור אותו לקובץ. כדי שיישאר לתמיד: בלוח של
+              Vercel — Settings ← Environment Variables — הוסף
+              <code>ANTHROPIC_API_KEY</code> עם המפתח, ועשה Redeploy.</div>`;
+          }
         } catch (e) {
           $("#connectError").textContent = e.message;
           $("#connectBtn").disabled = false;
@@ -245,6 +251,12 @@ async function loadSetup() {
       const label = h.claude_mode === "subscription" ? "מנוי claude.ai" : "מפתח API";
       if (!$("#stats").textContent.includes("מחובר"))
         $("#stats").textContent += ` · מחובר (${label})`;
+    }
+    if (h.ephemeral) {
+      $("#setupBanner").innerHTML += `<div class="meta" style="margin-bottom:1rem">
+        שים לב: באירוח serverless (Vercel) המשניות והמפרשים נטענים אוטומטית,
+        אבל יומן השאלות וספרים שנטענו מספריא אינם נשמרים לאורך זמן.
+        לשימוש קבוע עדיף אירוח עם דיסק (Railway / Fly.io) — ראה README.</div>`;
     }
   } catch {}
 }

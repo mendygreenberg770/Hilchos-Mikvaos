@@ -320,9 +320,15 @@ def connect_account(req: ConnectRequest):
         raise HTTPException(400, "המפתח לא התקבל — ודא שהועתק במלואו ושהוא פעיל")
     except anthropic.APIError as e:
         raise HTTPException(502, f"לא ניתן לאמת את המפתח מול השרת: {e.message}")
-    _save_env_var("ANTHROPIC_API_KEY", key)
     os.environ["ANTHROPIC_API_KEY"] = key
-    return health()
+    persisted = True
+    try:
+        _save_env_var("ANTHROPIC_API_KEY", key)
+    except OSError:
+        persisted = False  # read-only filesystem (serverless hosting)
+    out = health()
+    out["persisted"] = persisted
+    return out
 
 
 _ingest_state = {"running": False, "done": False, "error": None, "log": []}
@@ -422,6 +428,8 @@ def health():
             "texts": conn.execute("SELECT count(*) c FROM texts").fetchone()["c"],
             "answer_model": config.ANSWER_MODEL,
             "strong_model": config.STRONG_MODEL,
+            # serverless hosting (e.g. Vercel): /tmp database, nothing persists
+            "ephemeral": bool(os.environ.get("VERCEL")),
         }
 
 

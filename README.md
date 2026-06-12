@@ -171,6 +171,27 @@ tests/      offline unit tests (stdlib unittest)
 data/       SQLite database (gitignored) — back this up; it IS the system
 ```
 
+## Deployment
+
+**Vercel (quick demo).** Works out of the box — `vercel.json` + `api/index.py`
+are included; just import the repo in Vercel. Because Vercel is serverless
+with a read-only filesystem, the database lives in `/tmp`: the bundled
+mishnayos + meforshim load automatically on every cold start, but the
+**question log and Sefaria-loaded seforim do not persist**. Set
+`ANTHROPIC_API_KEY` in the project's Environment Variables (the in-app
+connect box works, but only until the instance recycles).
+
+**Railway / Fly.io / any VPS (recommended for real use).** The included
+`Dockerfile` runs the app with a persistent `/data` volume:
+
+- Railway: New Project → Deploy from GitHub → add a Volume mounted at
+  `/data` → set `ANTHROPIC_API_KEY` variable.
+- Fly.io: `fly launch`, `fly volumes create data`, mount at `/data`,
+  `fly secrets set ANTHROPIC_API_KEY=...`.
+
+Put it behind a password (both platforms offer basic protection options,
+or use Cloudflare Access) before exposing it to the internet.
+
 ## Roadmap (per the build spec)
 
 - [x] 1. Sefaria ingestion → SQLite with exact refs
