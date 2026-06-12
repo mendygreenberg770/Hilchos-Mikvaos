@@ -5,7 +5,7 @@ import json
 import os
 import sqlite3
 import threading
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -17,7 +17,35 @@ from . import config, db, retrieval
 from .answer import answer_question
 from .tagging import tag_question
 
-app = FastAPI(title="Hilchos Mikvaos Research")
+VILNA_RECORDS = Path(__file__).resolve().parent.parent / "sources" / \
+    "mishnayos_vilna_taharos" / "records.jsonl"
+
+
+def _autoload_bundled_sources():
+    """First run with an empty library: load the bundled Vilna extraction
+    (mishnayos + on-daf meforshim) automatically — it's local and instant.
+    The Sefaria works still load via the UI button or scripts (network)."""
+    if not VILNA_RECORDS.exists():
+        return
+    try:
+        conn = db.connect()
+        empty = conn.execute("SELECT count(*) c FROM texts").fetchone()["c"] == 0
+        conn.close()
+        if empty:
+            from ingest.vilna import ingest_vilna
+            print("Empty library — loading bundled Vilna mishnayos + meforshim…")
+            ingest_vilna(VILNA_RECORDS, verbose=False)
+    except Exception as e:
+        print(f"autoload skipped: {e}")
+
+
+@asynccontextmanager
+async def _lifespan(app):
+    _autoload_bundled_sources()
+    yield
+
+
+app = FastAPI(title="Hilchos Mikvaos Research", lifespan=_lifespan)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 

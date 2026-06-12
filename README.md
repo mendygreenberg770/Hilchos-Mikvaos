@@ -64,6 +64,11 @@ failed; fix it in `ingest/works.py` and re-run just that work.
 
 ## 1b. Vilna Mishnayos extraction (mishna + on-daf meforshim)
 
+**Loaded automatically:** when the app starts with an empty library, it
+ingests the bundled extraction by itself — the mishnayos and their on-daf
+meforshim are available out of the box, no commands needed. To (re)load
+manually:
+
 ```bash
 python scripts/ingest_vilna.py
 ```
